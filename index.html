@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>文件摆渡人</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 20px;
+    }
+    h1 {
+      font-size: 24px;
+      letter-spacing: 4px;
+      margin-bottom: 8px;
+      color: #ff4444;
+      text-shadow: 0 0 20px rgba(255,68,68,0.5);
+    }
+    .subtitle {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 25px;
+      letter-spacing: 2px;
+    }
+
+    .upload-zone {
+      width: 100%;
+      max-width: 600px;
+      border: 2px dashed #333;
+      border-radius: 8px;
+      padding: 40px 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 20px;
+    }
+    .upload-zone:hover {
+      border-color: #ff4444;
+      background: rgba(255,68,68,0.05);
+    }
+    .upload-zone svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 20px;
+      stroke: #666;
+    }
+    .upload-zone p {
+      color: #666;
+      font-size: 14px;
+    }
+    .upload-zone .highlight {
+      color: #ff4444;
+    }
+
+    .section {
+      width: 100%;
+      max-width: 600px;
+      margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 12px;
+      color: #666;
+      letter-spacing: 2px;
+      margin-bottom: 10px;
+      padding-left: 5px;
+    }
+
+    .file-list {
+      background: #151515;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 15px;
+      border-bottom: 1px solid #222;
+      transition: background 0.2s;
+    }
+    .file-item:last-child { border-bottom: none; }
+    .file-item:hover { background: #1a1a1a; }
+
+    .file-icon {
+      width: 32px;
+      height: 32px;
+      background: #222;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 15px;
+      font-size: 14px;
+    }
+    .file-info { flex: 1; min-width: 0; }
+    .file-name {
+      font-size: 14px;
+      margin-bottom: 4px;
+      word-break: break-all;
+    }
+    .file-size {
+      font-size: 11px;
+      color: #666;
+    }
+    .file-path {
+      font-size: 10px;
+      color: #444;
+      word-break: break-all;
+      margin-top: 4px;
+    }
+    .file-remove {
+      background: transparent;
+      border: 1px solid #ff4444;
+      color: #ff4444;
+      padding: 8px 16px;
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: 4px;
+      font-family: inherit;
+      transition: all 0.2s;
+      margin-left: 10px;
+      flex-shrink: 0;
+    }
+    .file-remove:hover {
+      background: #ff4444;
+      color: #0d0d0d;
+    }
+
+    .shred-btn {
+      background: linear-gradient(135deg, #cc0000, #ff2222);
+      border: none;
+      color: white;
+      padding: 15px 40px;
+      font-size: 14px;
+      font-family: inherit;
+      letter-spacing: 3px;
+      cursor: pointer;
+      border-radius: 6px;
+      width: 100%;
+      max-width: 600px;
+      transition: all 0.3s;
+      box-shadow: 0 4px 20px rgba(255,68,68,0.3);
+    }
+    .shred-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 30px rgba(255,68,68,0.5);
+    }
+    .shred-btn:disabled {
+      background: #333;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .progress-container {
+      width: 100%;
+      max-width: 600px;
+      margin-bottom: 15px;
+      display: none;
+    }
+    .progress-bar {
+      height: 4px;
+      background: #222;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ff4444, #ff6666);
+      width: 0%;
+      transition: width 0.1s;
+    }
+    .progress-text {
+      font-size: 11px;
+      color: #666;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .result {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #faf6f0;
+      padding: 0;
+      border-radius: 4px;
+      text-align: center;
+      display: none;
+      z-index: 100;
+      border: 1px solid #d4c5a9;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      max-width: 520px;
+      width: 90%;
+      font-family: 'Georgia', 'Times New Roman', serif;
+    }
+    .result.show { display: block; }
+    .result-header {
+      background: linear-gradient(to bottom, #8b7355, #6d5a45);
+      color: #faf6f0;
+      padding: 18px 28px;
+      font-size: 15px;
+      letter-spacing: 4px;
+    }
+    .letters-container {
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 20px 28px;
+    }
+    .letter {
+      background: #fffdf8;
+      border: 1px solid #e8dcc8;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      text-align: left;
+      position: relative;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .letter:last-child { margin-bottom: 0; }
+    .letter-meta {
+      color: #8b7355;
+      font-size: 12px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed #d4c5a9;
+      display: flex;
+      justify-content: space-between;
+    }
+    .letter-from { font-style: italic; }
+    .letter-to { font-style: italic; color: #999; }
+    .letter-content {
+      line-height: 1.9;
+      font-size: 14px;
+      color: #3c3c3c;
+      white-space: pre-wrap;
+      font-family: 'Georgia', serif;
+    }
+    .result-footer {
+      padding: 14px 28px 18px;
+      border-top: 1px solid #e8dcc8;
+    }
+    .result button {
+      background: #6d5a45;
+      border: none;
+      color: #faf6f0;
+      padding: 10px 36px;
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 3px;
+      font-family: inherit;
+      letter-spacing: 2px;
+    }
+    .result button:hover { background: #5a4a3a; }
+
+    .empty-state {
+      padding: 20px;
+      text-align: center;
+      color: #444;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h1>文件摆渡人</h1>
+  <p class="subtitle">数据覆写3次后彻底删除 · 无法恢复</p>
+
+  <div class="upload-zone" id="uploadZone">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    <p class="highlight">点击选择要粉碎的文件</p>
+    <p style="margin-top:10px; font-size:12px; color:#555;">不支持拖拽，请点击上方区域选择文件</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">待粉碎文件</div>
+    <div class="file-list" id="fileList">
+      <div class="empty-state">暂无文件</div>
+    </div>
+  </div>
+
+  <button class="shred-btn" id="shredBtn" disabled>粉碎文件</button>
+
+  <div class="progress-container" id="progressContainer">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-text" id="progressText">正在覆写...</div>
+  </div>
+
+  <div class="result" id="result">
+    <div class="result-header">📜 告别信</div>
+    <div class="letters-container" id="lettersContainer"></div>
+    <div class="result-footer">
+      <button onclick="closeResult()">尘归尘</button>
+    </div>
+  </div>
+
+  <script>
+    const uploadZone = document.getElementById('uploadZone');
+    const fileList = document.getElementById('fileList');
+    const shredBtn = document.getElementById('shredBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const result = document.getElementById('result');
+    const lettersContainer = document.getElementById('lettersContainer');
+
+    let files = [];
+
+    // Click to open file dialog
+    uploadZone.addEventListener('click', async () => {
+      const filePaths = await window.electronAPI.openFileDialog();
+      if (filePaths && filePaths.length > 0) {
+        await addFiles(filePaths);
+      }
+    });
+
+    async function addFiles(filePaths) {
+      for (const filePath of filePaths) {
+        const info = await window.electronAPI.getFileInfo(filePath);
+        if (info) {
+          files.push(info);
+        }
+      }
+      updateFileList();
+    }
+
+    function updateFileList() {
+      if (files.length === 0) {
+        fileList.innerHTML = '<div class="empty-state">暂无文件</div>';
+        shredBtn.disabled = true;
+        return;
+      }
+
+      fileList.innerHTML = files.map((f, i) => `
+        <div class="file-item">
+          <div class="file-icon">📄</div>
+          <div class="file-info">
+            <div class="file-name">${f.name}</div>
+            <div class="file-size">${formatSize(f.size)}</div>
+            <div class="file-path">${f.path}</div>
+          </div>
+          <button class="file-remove" onclick="removeFile(${i})">移除</button>
+        </div>
+      `).join('');
+
+      shredBtn.disabled = false;
+    }
+
+    function removeFile(index) {
+      files.splice(index, 1);
+      updateFileList();
+    }
+
+    shredBtn.addEventListener('click', async () => {
+      if (files.length === 0) return;
+
+      progressContainer.style.display = 'block';
+      shredBtn.disabled = true;
+
+      const filePaths = files.map(f => f.path);
+      const total = filePaths.length;
+      let completed = 0;
+
+      progressFill.style.width = '0%';
+      progressText.textContent = `正在粉碎 0/${total} 个文件...`;
+
+      try {
+        const results = await window.electronAPI.shredFiles(filePaths);
+
+        // Animate progress
+        for (let i = 0; i <= 100; i += 5) {
+          progressFill.style.width = i + '%';
+          await new Promise(r => setTimeout(r, 30));
+        }
+
+        const successResults = results.filter(r => r.success);
+        progressFill.style.width = '100%';
+        progressText.textContent = '粉碎完成';
+
+        setTimeout(() => {
+          progressContainer.style.display = 'none';
+          // Display letters for each shredded file
+          lettersContainer.innerHTML = successResults.map(r => `
+            <div class="letter">
+              <div class="letter-meta">
+                <span class="letter-from">发件人: ${r.sender}</span>
+                <span class="letter-to">收件人: 世界</span>
+              </div>
+              <div class="letter-content">${r.content || '...'}</div>
+            </div>
+          `).join('');
+          result.classList.add('show');
+          files = [];
+          updateFileList();
+        }, 500);
+      } catch (err) {
+        console.error(err);
+        alert('粉碎失败: ' + err.message);
+        progressContainer.style.display = 'none';
+        shredBtn.disabled = false;
+      }
+    });
+
+    // Listen for files added via command line
+    window.electronAPI.onAddFilesFromArgs(async (filePaths) => {
+      await addFiles(filePaths);
+    });
+
+    function closeResult() {
+      result.classList.remove('show');
+    }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "name": "file-ferryman",
+  "version": "1.0.0",
+  "description": "文件摆渡人 - 一个有灵魂的文件粉碎桌面应用",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "build": {
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "win": {
+      "target": "dir"
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "asar": false,
+    "forceCodeSigning": false
+  },
+  "keywords": [
+    "file-shredder",
+    "electron",
+    "deepseek"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^42.0.1",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
