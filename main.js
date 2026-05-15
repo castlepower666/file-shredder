@@ -128,6 +128,72 @@ function getDefaultLastWords(fileName) {
   };
 }
 
+// Shred a directory (folder) with all its files
+async function shredDirectory(dirPath, passes = 3) {
+  const results = [];
+
+  // Get all files recursively
+  function getFilesRecursive(dir, files = []) {
+    const items = fs.readdirSync(dir);
+    for (const item of items) {
+      const fullPath = path.join(dir, item);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          getFilesRecursive(fullPath, files);
+        } else {
+          files.push(fullPath);
+        }
+      } catch (e) {
+        // Skip inaccessible files
+      }
+    }
+    return files;
+  }
+
+  const files = getFilesRecursive(dirPath);
+  log('Found', files.length, 'files in directory:', dirPath);
+
+  // Shred each file
+  for (const filePath of files) {
+    try {
+      await shredFile(filePath, passes);
+      results.push({ path: filePath, success: true });
+      log('Shredded file:', filePath);
+    } catch (err) {
+      results.push({ path: filePath, success: false, error: err.message });
+      log('Failed to shred:', filePath, err.message);
+    }
+  }
+
+  // Remove empty directories (bottom-up)
+  function removeEmptyDirs(dir) {
+    try {
+      const items = fs.readdirSync(dir);
+      for (const item of items) {
+        const fullPath = path.join(dir, item);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          removeEmptyDirs(fullPath);
+        }
+      }
+      // Try to remove directory (will fail if not empty)
+      try {
+        fs.rmdirSync(dir);
+        log('Removed directory:', dir);
+      } catch (e) {
+        // Directory not empty, ignore
+      }
+    } catch (e) {
+      // Cannot read directory, ignore
+    }
+  }
+
+  removeEmptyDirs(dirPath);
+
+  return results;
+}
+
 // Shred a file with DoD 5220.22-M standard
 async function shredFile(filePath, passes = 3) {
   const stats = fs.statSync(filePath);
@@ -154,37 +220,64 @@ async function shredFromArgs() {
   const args = process.argv.slice(1); // Skip first arg (electron.exe path)
   log('Args after slice(1):', args);
 
-  const filePaths = args.filter(arg => {
+  // Separate files and directories
+  const filePaths = [];
+  const dirPaths = [];
+
+  args.forEach(arg => {
     try {
       const stat = fs.statSync(arg);
-      log('stat for', arg, ':', stat.isFile() ? 'is file' : 'not file');
-      return stat.isFile();
+      if (stat.isDirectory()) {
+        log('Directory:', arg);
+        dirPaths.push(arg);
+      } else if (stat.isFile()) {
+        log('File:', arg);
+        filePaths.push(arg);
+      }
     } catch (e) {
       log('Error stat', arg, ':', e.message);
-      return false;
     }
   });
 
-  if (filePaths.length > 0) {
-    console.log('Shredding files dropped onto exe:', filePaths);
+  const results = [];
 
-    const results = [];
-    for (const filePath of filePaths) {
-      try {
-        await shredFile(filePath, 3);
-        const lastWords = await generateLastWords(filePath);
-        results.push({ path: filePath, name: path.basename(filePath), success: true, sender: lastWords.sender, content: lastWords.content });
-        console.log('Shredded:', filePath);
-      } catch (err) {
-        results.push({ path: filePath, name: path.basename(filePath), success: false, error: err.message });
-        console.error('Failed:', filePath, err.message);
-      }
+  // Shred files
+  for (const filePath of filePaths) {
+    try {
+      await shredFile(filePath, 3);
+      const lastWords = await generateLastWords(filePath);
+      results.push({ path: filePath, name: path.basename(filePath), success: true, sender: lastWords.sender, content: lastWords.content });
+      console.log('Shredded:', filePath);
+    } catch (err) {
+      results.push({ path: filePath, name: path.basename(filePath), success: false, error: err.message });
+      console.error('Failed:', filePath, err.message);
     }
-
-    return results;
   }
 
-  return [];
+  // Shred directories
+  for (const dirPath of dirPaths) {
+    try {
+      const dirResults = await shredDirectory(dirPath, 3);
+      // Generate one letter for the directory as a whole
+      const dirName = path.basename(dirPath);
+      const lastWords = await generateLastWords(dirPath);
+      results.push({
+        path: dirPath,
+        name: dirName,
+        success: true,
+        isDirectory: true,
+        fileCount: dirResults.length,
+        sender: lastWords.sender,
+        content: lastWords.content
+      });
+      console.log('Shredded directory:', dirPath, 'with', dirResults.length, 'files');
+    } catch (err) {
+      results.push({ path: dirPath, name: path.basename(dirPath), success: false, error: err.message });
+      console.error('Failed directory:', dirPath, err.message);
+    }
+  }
+
+  return results;
 }
 
 function createWindow() {
@@ -370,7 +463,7 @@ app.on('window-all-closed', () => {
 // Open file dialog
 ipcMain.handle('open-file-dialog', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile', 'multiSelections']
+    properties: ['openFile', 'openDirectory', 'multiSelections']
   });
   return result.filePaths;
 });
@@ -379,10 +472,27 @@ ipcMain.handle('open-file-dialog', async () => {
 ipcMain.handle('shred-files', async (event, filePaths) => {
   const results = [];
 
-  for (const filePath of filePaths) {
+  // Separate files and directories
+  const files = [];
+  const dirs = [];
+
+  for (const fp of filePaths) {
+    try {
+      const stat = fs.statSync(fp);
+      if (stat.isDirectory()) {
+        dirs.push(fp);
+      } else {
+        files.push(fp);
+      }
+    } catch (err) {
+      results.push({ path: fp, name: path.basename(fp), success: false, error: err.message });
+    }
+  }
+
+  // Shred files
+  for (const filePath of files) {
     try {
       await shredFile(filePath, 3);
-      // Generate last words after successful shred
       const lastWords = await generateLastWords(filePath);
       results.push({
         path: filePath,
@@ -393,6 +503,25 @@ ipcMain.handle('shred-files', async (event, filePaths) => {
       });
     } catch (err) {
       results.push({ path: filePath, name: path.basename(filePath), success: false, error: err.message });
+    }
+  }
+
+  // Shred directories
+  for (const dirPath of dirs) {
+    try {
+      const dirResults = await shredDirectory(dirPath, 3);
+      const lastWords = await generateLastWords(dirPath);
+      results.push({
+        path: dirPath,
+        name: path.basename(dirPath),
+        success: true,
+        isDirectory: true,
+        fileCount: dirResults.length,
+        sender: lastWords.sender,
+        content: lastWords.content
+      });
+    } catch (err) {
+      results.push({ path: dirPath, name: path.basename(dirPath), success: false, error: err.message });
     }
   }
 
